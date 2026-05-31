@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signed English Player</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #f8f8f6; color: #1a1a1a; min-height: 100vh; display: flex; justify-content: center; padding: 2rem 1rem; }
+.app { width: 100%; max-width: 640px; }
+h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+.subtitle { font-size: 14px; color: #666; margin-bottom: 1.5rem; line-height: 1.5; }
+
+.input-row { margin-bottom: 0.75rem; }
+.input-row input { width: 100%; font-size: 16px; padding: 0 14px; height: 46px; border: 1.5px solid #d0d0cc; border-radius: 10px; background: #fff; color: #1a1a1a; outline: none; }
+.input-row input:focus { border-color: #5a9e3a; box-shadow: 0 0 0 3px rgba(90,158,58,0.1); }
+
+.autoplay-row { display: flex; align-items: center; gap: 8px; margin-bottom: 1.25rem; font-size: 13px; color: #555; }
+.autoplay-row label { cursor: pointer; }
+
+/* Word chips */
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem; min-height: 28px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px; font-size: 15px; border: 1.5px solid #e0e0d8; background: #f0f0ec; color: #999; cursor: default; font-weight: 500; }
+.chip.found { background: #fff; border: 2px solid #5a9e3a; color: #2d5a0a; cursor: pointer; box-shadow: 0 2px 6px rgba(90,158,58,0.15); transition: background 0.1s, transform 0.1s, box-shadow 0.1s; }
+.chip.found:hover { background: #eaf3de; box-shadow: 0 4px 12px rgba(90,158,58,0.25); transform: translateY(-1px); }
+.chip.found:active { transform: translateY(0); }
+.chip.fingerspell { background: #fff; border: 2px solid #5b7ec9; color: #1e3a8a; cursor: pointer; box-shadow: 0 2px 6px rgba(91,126,201,0.15); transition: background 0.1s, transform 0.1s, box-shadow 0.1s; }
+.chip.fingerspell:hover { background: #eef2ff; box-shadow: 0 4px 12px rgba(91,126,201,0.25); transform: translateY(-1px); }
+.chip.fingerspell:active { transform: translateY(0); }
+.chip.not-found { background: #fafafa; border: 1.5px dashed #ddd; color: #bbb; text-decoration: line-through; }
+.chip.active { background: #2d5a0a; border-color: #2d5a0a; color: #fff; box-shadow: 0 3px 10px rgba(45,90,10,0.3); transform: translateY(-1px); }
+.chip.active:hover { background: #3a7212; }
+.chip.active-fs { background: #1e3a8a; border-color: #1e3a8a; color: #fff; box-shadow: 0 3px 10px rgba(30,58,138,0.3); transform: translateY(-1px); }
+
+/* Video stage */
+.stage { background: #1a1a1a; border-radius: 12px; overflow: hidden; margin-bottom: 0.75rem; min-height: 240px; display: flex; align-items: center; justify-content: center; }
+.stage-empty { text-align: center; color: #888; padding: 2rem; }
+.stage-empty .icon { font-size: 40px; margin-bottom: 12px; }
+.stage-empty p { font-size: 14px; }
+.video-wrap { width: 100%; position: relative; }
+.video-wrap video { width: 100%; display: block; max-height: 400px; }
+.video-label { position: absolute; bottom: 0; left: 0; right: 0; padding: 10px 14px 12px; background: linear-gradient(transparent, rgba(0,0,0,0.72)); color: #fff; font-size: 18px; font-weight: 600; text-transform: capitalize; display: flex; align-items: flex-end; gap: 8px; }
+
+/* Fingerspell stage */
+.fs-wrap { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem; gap: 1rem; }
+.fs-letter-display { display: flex; align-items: center; justify-content: center; gap: 1rem; }
+.fs-img { max-height: 220px; max-width: 100%; border-radius: 8px; background: #fff; }
+.fs-letter { font-size: 64px; font-weight: 700; color: #fff; min-width: 60px; text-align: center; text-transform: uppercase; }
+.fs-word-label { color: #aaa; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; }
+.fs-letters-row { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.fs-letter-pip { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #fff; border: 1.5px solid rgba(255,255,255,0.2); text-transform: uppercase; }
+.fs-letter-pip.done { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.5); }
+.fs-letter-pip.current { background: #5b7ec9; border-color: #93b4f0; }
+.fs-letter-pip.pending { background: transparent; color: rgba(255,255,255,0.3); }
+
+/* Variant pills shown inside the video label area */
+.variant-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.variant-pill { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; border: 1.5px solid #5a9e3a; background: #fff; color: #2d5a0a; cursor: pointer; transition: background 0.1s; }
+.variant-pill:hover { background: #eaf3de; }
+.variant-pill.active { background: #2d5a0a; color: #fff; border-color: #2d5a0a; }
+.variant-pill.loading { opacity: 0.5; cursor: default; }
+
+/* Prev/Next controls */
+.controls { display: flex; align-items: center; gap: 8px; margin-bottom: 0.5rem; }
+.controls button { height: 36px; padding: 0 14px; font-size: 13px; border: 1px solid #d0d0cc; border-radius: 8px; background: #fff; color: #1a1a1a; cursor: pointer; }
+.controls button:hover { background: #f0f0ec; }
+.controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+.progress { font-size: 13px; color: #666; margin-left: auto; }
+
+.notice { font-size: 12px; color: #888; margin-top: 6px; }
+.dict-status { font-size: 12px; color: #aaa; margin-bottom: 0.75rem; min-height: 18px; transition: opacity 0.3s; }
+
+/* Translation section */
+.translate-section { margin-top: 1.25rem; border-top: 1px solid #e8e8e4; padding-top: 1rem; }
+.translate-btn { height: 38px; padding: 0 16px; font-size: 13px; font-weight: 500; border: 1.5px solid #5b7ec9; border-radius: 8px; background: #fff; color: #1e3a8a; cursor: pointer; transition: background 0.1s; }
+.translate-btn:hover { background: #eef2ff; }
+.translate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.translate-result { margin-top: 0.75rem; display: none; }
+.translate-gloss { font-size: 20px; font-weight: 700; letter-spacing: 0.05em; color: #1a1a1a; margin-bottom: 0.5rem; line-height: 1.4; }
+.translate-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #aaa; margin-bottom: 4px; }
+.translate-notes { display: flex; flex-direction: column; gap: 5px; margin-top: 0.5rem; }
+.translate-note { font-size: 12px; color: #555; background: #f8f8f4; border-left: 3px solid #d0c060; padding: 6px 10px; border-radius: 0 6px 6px 0; line-height: 1.5; }
+.translate-note.blue { border-left-color: #5b7ec9; }
+.translate-word-limit { font-size: 12px; color: #e07050; margin-top: 4px; }
+
+/* Debug console */
+.debug-wrap { margin-top: 1rem; border-top: 1px solid #eee; padding-top: 8px; }
+.debug-toggle { font-size: 12px; color: #aaa; cursor: pointer; background: none; border: none; padding: 0; }
+.debug-console { font-size: 11px; color: #444; margin-top: 6px; font-family: monospace; word-break: break-all; white-space: pre-wrap; display: none; background: #f4f4f0; border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; max-height: 200px; overflow-y: auto; user-select: all; cursor: text; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Signed English Player</h1>
+  <p class="subtitle">Type a sentence to see each word signed in English word order, using signs from the Auslan Signbank. Signs are shown word-by-word — this is Signed English, not Auslan.</p>
+
+  <div class="input-row">
+    <input type="text" id="sentenceInput" placeholder="e.g. hello everyone" autocomplete="off" />
+  </div>
+
+  <div class="autoplay-row">
+    <input type="checkbox" id="autoplayCheck" checked />
+    <label for="autoplayCheck">Autoplay</label>
+    <span style="color:#ddd;margin:0 4px">|</span>
+    <input type="checkbox" id="loopCheck" checked />
+    <label for="loopCheck">Loop video</label>
+  </div>
+
+  <div class="chip-row" id="chipRow"></div>
+
+  <div id="dictStatus" class="dict-status">⏳ Loading dictionary…</div>
+
+  <div class="stage" id="stage">
+    <div class="stage-empty">
+      <div class="icon">🤟</div>
+      <p>Your signed sentence will appear here</p>
+    </div>
+  </div>
+
+  <div class="variant-pills" id="variantPills" style="display:none"></div>
+
+  <div class="controls" id="controls" style="display:none">
+    <button id="prevBtn" onclick="prevSign()">← Prev</button>
+    <button id="replayBtn" onclick="replaySign()">↺ Replay</button>
+    <button id="nextBtn" onclick="nextSign()">Next →</button>
+    <span class="progress" id="progressText"></span>
+  </div>
+
+  <div class="notice" id="noticeArea"></div>
+
+  <!-- Translation section -->
+  <div class="translate-section">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="translate-btn" id="translateBtn" onclick="doTranslate()">✦ Suggest Auslan word order</button>
+      <button class="translate-btn" id="swapBtn" onclick="swapToInput()" style="display:none">⇄ Use this order</button>
+    </div>
+    <div class="translate-word-limit" id="translateLimit"></div>
+    <div class="translate-result" id="translateResult">
+      <div class="translate-label">Suggested gloss</div>
+      <div class="translate-gloss" id="translateGloss"></div>
+      <div class="translate-notes" id="translateNotes"></div>
+    </div>
+  </div>
+
+  <!-- Debug console -->
+  <div class="debug-wrap">
+    <button class="debug-toggle" onclick="toggleDebug()">▶ Show debug log</button>
+    <div class="debug-console" id="debugArea"></div>
+  </div>
+</div>
+
+<script>
+// ── Load dictionary ───────────────────────────────────────────────────
+// Tries to load auslan-dictionary.json (generated by build-dictionary.py).
+// Falls back to the hardcoded seed below for instantly-known words.
+const AUTH = 'https://object-store.rc.nectar.org.au/v1/AUTH_92e2f9b70316412697cddc6f3ac0ee4e/staticauslanorgau/';
+const SEED = {
+  'hello':    { videoUrls: [AUTH+'mp4video/33/33460_1.mp4'], signCount: 4 },
+  'hi':       { videoUrls: [AUTH+'mp4video/33/33460_1.mp4'], signCount: 4 },
+  'like':     { videoUrls: [AUTH+'auslan/34/34480.mp4'], signCount: 4 },
+  'read':     { videoUrls: [AUTH+'auslan/17/17420.mp4'], signCount: 1 },
+  'morning':  { videoUrls: [AUTH+'auslan/34/34770.mp4'], signCount: 2 },
+  'sorry':    { videoUrls: [AUTH+'auslan/29/29140.mp4'], signCount: 5 },
+  'afternoon':{ videoUrls: [AUTH+'mp4video/24/24720_1.mp4'], signCount: 5 },
+  'australia':{ videoUrls: [AUTH+'mp4video/31/31230.mp4'], signCount: 2 },
+  'my':       { videoUrls: [AUTH+'auslan/56/56410.mp4', AUTH+'mp4video/34/34455.mp4'], signCount: 1 },
+  'mine':     { videoUrls: [AUTH+'auslan/56/56410.mp4', AUTH+'mp4video/34/34455.mp4'], signCount: 1 },
+  'name':     { videoUrls: [AUTH+'mp4video/Gloss/37/3740.mp4', AUTH+'mp4video/64/64570_1.mp4'], signCount: 2 },
+  'teacher':  { videoUrls: [AUTH+'mp4video/50/50940_1.mp4'], signCount: 2 },
+  'job':      { videoUrls: [AUTH+'mp4video/Gloss/65/6555.mp4', AUTH+'mp4video/Gloss/76/7624.mp4'], signCount: 1 },
+  'him':      { videoUrls: ['https://object-store.rc.nectar.org.au/v1/AUTH_92e2f9b70316412697cddc6f3ac0ee4e/staticauslanorgau/mp4video/76/7630_1.mp4'], signCount: 1 },
+  'elephant': { videoUrls: [AUTH+'mp4video/55/55790_1.mp4', AUTH+'mp4video/29/290_1.mp4'], signCount: 1 },
+  'tree':     { videoUrls: [AUTH+'mp4video/28/28785.mp4'], signCount: 3 },
+};
+
+// wordCache starts as the seed, grows when JSON loads or sign pages are fetched
+const wordCache = { ...SEED };
+
+// Try to load the full dictionary JSON (generated by build-dictionary.py)
+const dictStatus = document.getElementById('dictStatus');
+fetch('auslan-dictionary.json')
+  .then(r => r.ok ? r.json() : null)
+  .then(data => {
+    if (data) {
+      Object.assign(wordCache, data);
+      log(`Loaded ${Object.keys(data).length} words from dictionary`);
+      dictStatus.textContent = `✓ Dictionary loaded — ${Object.keys(data).length.toLocaleString()} signs`;
+      setTimeout(() => { dictStatus.style.opacity = '0'; }, 2000);
+      setTimeout(() => { dictStatus.textContent = ''; dictStatus.style.opacity = '1'; }, 2500);
+    } else {
+      dictStatus.textContent = '⚠ Dictionary file not found — using built-in words only.';
+    }
+  })
+  .catch(() => {
+    log('No auslan-dictionary.json found — using seed words only');
+    dictStatus.textContent = '⚠ Dictionary file not found — using built-in words only.';
+  });
+
+// null means we already tried and it doesn't exist
+// undefined means we haven't looked yet
+
+let wordData = [];   // [{word, found, videoUrls, signCount, currentVideoIdx, currentSignIdx}, ...]
+let currentIdx = 0;  // which word is currently showing
+
+// ── Debug ────────────────────────────────────────────────────────────
+function log(msg) { document.getElementById('debugArea').textContent += msg + '\n'; }
+function toggleDebug() {
+  const d = document.getElementById('debugArea');
+  const btn = document.querySelector('.debug-toggle');
+  const shown = d.style.display === 'block';
+  d.style.display = shown ? 'none' : 'block';
+  btn.textContent = shown ? '▶ Show debug log' : '▼ Hide debug log (select all to copy)';
+}
+
+// ── Translation engine ────────────────────────────────────────────────
+const WORD_LIMIT = 10;
+
+const TIME_WORDS = new Set([
+  'yesterday','today','tomorrow','now','later','soon','already','before','after',
+  'always','never','sometimes','morning','afternoon','tonight','then','next','monday',
+  'tuesday','wednesday','thursday','friday','saturday','sunday','weekly','daily','recently'
+]);
+const TIME_PHRASES = [
+  'last week','last night','last month','last year',
+  'next week','next month','next year',
+  'this morning','this afternoon','this week','this year',
+];
+const QUESTION_WORDS = new Set(['what','where','when','who','why','how']);
+const PRONOUNS = new Set(['i','me','my','mine','you','your','yours','we','us','our','they','them','their','he','him','his','she','her','hers']);
+const SKIP_WORDS = new Set([
+  'is','are','was','were','be','been','being','am',
+  'a','an','the','of','to','by','for','at','in','on','with','up',
+  'do','does','did','will','would','could','should','shall','may','might','must','have','has','had',
+  'that','this','which','so','and','but','or','just','than','then','as','from','into','about',
+]);
+const NEGATIONS = new Set(['not','never','no','nothing','nobody']);
+const DIRECTIONAL_VERBS = new Set(['like','love','hate','give','tell','help','show','teach','send','ask','pay','owe']);
+const POLITE = new Set(['please','thank','sorry']);
+const CONTRACTIONS = {
+  "don't":"do not","doesn't":"does not","didn't":"did not",
+  "can't":"cannot","won't":"will not","i'm":"i am",
+  "i'll":"i will","you're":"you are","they're":"they are","we're":"we are","it's":"it is"
+};
+
+// POS cache — populated by Free Dictionary API lookups
+const posCache = {};
+
+// Possessives stay with their noun — separate from subject pronouns
+const POSSESSIVES = new Set(['my','your','your','his','her','our','their','its']);
+
+// Simple suffix stripping to find base verb form
+function stemWord(w) {
+  if (w.endsWith('ing') && w.length > 5) return w.slice(0, -3);   // shopping→shop, running→run(n stripped separately)
+  if (w.endsWith('ing') && w.length > 4) return w.slice(0, -3);
+  if (w.endsWith('ed') && w.length > 4)  return w.slice(0, -2);   // walked→walk
+  if (w.endsWith('ed') && w.length > 4)  return w.slice(0, -1);   // liked→like
+  if (w.endsWith('s') && w.length > 3)   return w.slice(0, -1);   // runs→run
+  return null;
+}
+
+// Irregular verb map
+const IRREGULAR_VERBS = {
+  'went':'go','gone':'go','been':'be','seen':'see','saw':'see',
+  'ate':'eat','eaten':'eat','ran':'run','swum':'swim','swam':'swim',
+  'came':'come','said':'say','told':'tell','gave':'give','taken':'take',
+  'took':'take','made':'make','got':'get','knew':'know','thought':'think',
+  'bought':'buy','brought':'bring','taught':'teach','caught':'catch',
+  'felt':'feel','kept':'keep','left':'leave','met':'meet','paid':'pay',
+  'sent':'send','sat':'sit','stood':'stand','wore':'wear','wrote':'write',
+  'drew':'draw','grew':'grow','flew':'fly','threw':'throw','knew':'know',
+  'drove':'drive','rode':'ride','rose':'rise','spoke':'speak','broke':'break',
+};
+
+async function getPOS(word) {
+  const w = word.toLowerCase();
+  if (QUESTION_WORDS.has(w)) return 'question';
+  if (PRONOUNS.has(w))       return POSSESSIVES.has(w) ? 'possessive' : 'pronoun';
+  if (SKIP_WORDS.has(w))     return 'skip';
+  if (NEGATIONS.has(w))      return 'negation';
+  if (POLITE.has(w))         return 'polite';
+  if (TIME_WORDS.has(w))     return 'time';
+  if (posCache[w] !== undefined) return posCache[w];
+
+  // Check irregular verbs first
+  if (IRREGULAR_VERBS[w]) {
+    posCache[w] = 'verb';
+    log(`POS: ${w} → irregular verb`);
+    return 'verb';
+  }
+
+  // Try the dictionary API
+  const result = await fetchPOS(w);
+  if (result !== 'unknown') { posCache[w] = result; return result; }
+
+  // If not found, try stemming
+  const stem = stemWord(w);
+  if (stem) {
+    const stemResult = await fetchPOS(stem);
+    if (stemResult === 'verb') {
+      posCache[w] = 'verb';
+      log(`POS: ${w} → stemmed to ${stem} → verb`);
+      return 'verb';
+    }
+    if (stemResult === 'noun') {
+      // -ing words that stem to a noun are gerunds — treat as verb in Auslan
+      if (w.endsWith('ing')) { posCache[w] = 'verb'; return 'verb'; }
+      posCache[w] = 'noun'; return 'noun';
+    }
+  }
+
+  posCache[w] = 'unknown';
+  return 'unknown';
+}
+
+async function fetchPOS(w) {
+  try {
+    const resp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`);
+    if (!resp.ok) return 'unknown';
+    const data = await resp.json();
+    const pos = data[0]?.meanings?.[0]?.partOfSpeech || 'unknown';
+    const mapped = pos === 'adjective' ? 'adjective'
+                 : pos === 'adverb'    ? 'adverb'
+                 : pos === 'verb'      ? 'verb'
+                 : pos === 'noun'      ? 'noun'
+                 : 'unknown';
+    log(`POS: ${w} → ${pos} → ${mapped}`);
+    return mapped;
+  } catch (e) { return 'unknown'; }
+}
+
+function expandContractions(words) {
+  return words.flatMap(w => {
+    const expanded = CONTRACTIONS[w.toLowerCase()];
+    return expanded ? expanded.split(' ') : [w];
+  });
+}
+
+async function doTranslate() {
+  try {
+  log('=== doTranslate started ===');
+  // Auto-open debug panel
+  document.getElementById('debugArea').style.display = 'block';
+  document.querySelector('.debug-toggle').textContent = '▼ Hide debug log (select all to copy)';
+  document.getElementById('debugArea').textContent = '';
+  const raw = document.getElementById('sentenceInput').value.trim();
+  log(`Input: "${raw}"`);
+  if (!raw) { log('Empty input, returning'); return; }
+
+  const rawWords = raw.replace(/[?!.]/g, '').split(/\s+/).filter(Boolean);
+  log(`rawWords: ${JSON.stringify(rawWords)}`);
+  const words = expandContractions(rawWords.map(w => w.toLowerCase()));
+  log(`words after contraction expansion: ${JSON.stringify(words)}`);
+
+  // Build a map of lowercase→isProperNoun by checking original capitalisation
+  // Rules: capitalised AND not first word AND not a known pronoun/function word
+  const NOT_NAMES = new Set(['i','a','the','is','are','was','were','be','been','my','your','his','her',
+    'our','their','its','he','she','we','they','me','him','us','them','who','what','where','when','why','how',
+    'and','but','or','so','if','do','did','does','will','would','can','could','should','may','might','must',
+    'have','has','had','not','no','yes','please','thank','sorry','am','to','of','for','by','at','in','on','with']);
+  const properNouns = new Set();
+  rawWords.forEach((w, i) => {
+    const lower = w.toLowerCase();
+    if (i === 0) return;
+    if (/^[A-Z][a-z]/.test(w) && !NOT_NAMES.has(lower)) {
+      properNouns.add(lower);
+      log(`  proper noun detected: "${w}" → "${lower}"`);
+    }
+  });
+  log(`properNouns: ${JSON.stringify([...properNouns])}`);
+
+  const limitEl = document.getElementById('translateLimit');
+  limitEl.textContent = '';
+
+  const btn = document.getElementById('translateBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Analysing…';
+  log('Button disabled, starting analysis...');
+
+  // Detect multi-word time phrases
+  const sentence_joined = words.join(' ');
+  log(`Joined for time phrase search: "${sentence_joined}"`);
+  const timePhraseTokens = new Set();
+  const foundTimePhrases = [];
+  for (const phrase of TIME_PHRASES.sort((a,b) => b.length - a.length)) {
+    if (sentence_joined.includes(phrase)) {
+      foundTimePhrases.push(phrase.toUpperCase());
+      phrase.split(' ').forEach(w => timePhraseTokens.add(w));
+      log(`  time phrase found: "${phrase}"`);
+    }
+  }
+  log(`timePhraseTokens: ${JSON.stringify([...timePhraseTokens])}`);
+
+  // Tag all words
+  log('Starting word tagging...');
+  const tagged = [];
+  for (const w of words) {
+    if (timePhraseTokens.has(w)) {
+      log(`  "${w}" → time_phrase`);
+      tagged.push([w, 'time_phrase']);
+    } else if (properNouns.has(w) && !PRONOUNS.has(w) && !SKIP_WORDS.has(w) && !TIME_WORDS.has(w)) {
+      log(`  "${w}" → name (proper noun)`);
+      tagged.push([w, 'name']);
+    } else {
+      const pos = await getPOS(w);
+      log(`  "${w}" → ${pos} (from getPOS)`);
+      tagged.push([w, pos]);
+    }
+  }
+
+  log(`=== TAGGED ===`);
+  tagged.forEach(([w,p]) => log(`  ${w} → ${p}`));
+
+  // Collect by category
+  const timeMarkers  = [...foundTimePhrases, ...tagged.filter(([,p]) => p==='time').map(([w]) => w.toUpperCase())];
+  const questionWords= tagged.filter(([,p]) => p==='question').map(([w]) => w);
+  const pronouns     = tagged.filter(([,p]) => p==='pronoun').map(([w]) => w);
+  const negations    = tagged.filter(([,p]) => p==='negation').map(([w]) => w);
+  const polite       = tagged.filter(([,p]) => p==='polite').map(([w]) => w);
+  const names      = tagged.filter(([,p]) => p==='name').map(([w]) => w);
+  const verbs        = tagged.filter(([,p]) => p==='verb').map(([w]) => w);
+  const skipped      = tagged.filter(([,p]) => p==='skip' || p==='time_phrase').map(([w]) => w);
+  const unknown      = tagged.filter(([,p]) => p==='unknown').map(([w]) => w);
+
+  // Build noun+adjective+possessive groups (names treated as nouns, shown as fs:WORD)
+  const content = tagged.filter(([,p]) => ['noun','adjective','possessive','unknown','name'].includes(p));
+  const displayWord = (w, p) => p === 'name' ? `fs:${w.toUpperCase()}` : w.toUpperCase();
+  const nounAdj = [];
+  let ci = 0;
+  while (ci < content.length) {
+    const [w, p] = content[ci];
+    if (p === 'possessive') {
+      const poss = [w.toUpperCase()];
+      ci++;
+      if (ci < content.length && ['noun','name','unknown'].includes(content[ci][1])) {
+        nounAdj.push(displayWord(content[ci][0], content[ci][1]));
+        nounAdj.push(...poss);
+        ci++;
+      } else {
+        nounAdj.push(...poss);
+      }
+    } else if (['noun','unknown','name'].includes(p)) {
+      nounAdj.push(displayWord(w, p));
+      ci++;
+      while (ci < content.length && ['adjective','possessive'].includes(content[ci][1])) {
+        nounAdj.push(content[ci][0].toUpperCase());
+        ci++;
+      }
+    } else if (p === 'adjective') {
+      const adjs = [];
+      while (ci < content.length && content[ci][1] === 'adjective') {
+        adjs.push(content[ci][0].toUpperCase());
+        ci++;
+      }
+      if (ci < content.length && ['noun','unknown','name'].includes(content[ci][1])) {
+        nounAdj.push(displayWord(content[ci][0], content[ci][1]));
+        nounAdj.push(...adjs);
+        ci++;
+      } else {
+        nounAdj.push(...adjs);
+      }
+    } else {
+      ci++;
+    }
+  }
+
+  // Compose gloss: TIME | NOUN+ADJ | SUBJECT-PRONOUN | VERB | NEGATION | POLITE | QUESTION
+  const gloss = [
+    ...timeMarkers,
+    ...nounAdj,
+    ...pronouns.map(w => w.toUpperCase()),
+    ...verbs.map(w => w.toUpperCase()),
+    ...negations.map(w => w.toUpperCase()),
+    ...polite.map(w => w.toUpperCase()),
+    ...questionWords.map(w => w.toUpperCase()),
+  ].join(' ');
+
+  // Build notes
+  const notes = [];
+  const realSkipped = skipped.filter(w => !timePhraseTokens.has(w));
+  if (realSkipped.length) {
+    notes.push({ text: `"${realSkipped.join('", "')}" dropped — these words are not used in Auslan`, style: '' });
+  }
+  if (names.length) {
+    notes.push({ text: `"${names.map(n => n.charAt(0).toUpperCase() + n.slice(1)).join('", "')}" looks like a name — shown as fs:NAME (fingerspell it)`, style: 'blue' });
+  }
+  const dirVerbs = verbs.filter(v => DIRECTIONAL_VERBS.has(v.toLowerCase()));
+  if (dirVerbs.length) {
+    notes.push({ text: `"${dirVerbs.join('", "')}" is a directional verb — the sign physically moves toward whoever receives the action (e.g. GIVE moving toward "you" means "I give you")`, style: 'blue' });
+  }
+  if (questionWords.length) {
+    const isWh = questionWords.some(w => ['what','where','when','who','why','how'].includes(w));
+    if (isWh) {
+      notes.push({ text: 'Wh-question: furrow your brows throughout the sentence, question word goes at the end', style: '' });
+    } else {
+      notes.push({ text: 'Yes/no question: raise your eyebrows throughout the whole sentence', style: '' });
+    }
+  }
+  if (negations.length) {
+    notes.push({ text: 'Negation: shake your head while signing NOT', style: '' });
+  }
+  if (unknown.length) {
+    notes.push({ text: `Word type unclear for: "${unknown.join('", "')}" — position is approximate, may need adjustment`, style: '' });
+  }
+  notes.push({ text: '⚠ This is an approximate gloss only — Auslan grammar also uses facial expression, body movement and 3D space which cannot be shown here', style: '' });
+
+  log(`=== GLOSS: "${gloss}" ===`);
+
+  // Render gloss — fs:WORD shown with fingerspell style
+  const glossEl = document.getElementById('translateGloss');
+  glossEl.innerHTML = gloss.split(' ').map(token => {
+    if (token.startsWith('fs:')) {
+      return `<span style="color:#1e3a8a;border-bottom:2px dashed #5b7ec9;padding-bottom:1px" title="Fingerspell this">${token.slice(3)}</span>`;
+    }
+    return `<span>${token}</span>`;
+  }).join(' ');
+  const notesEl = document.getElementById('translateNotes');
+  notesEl.innerHTML = '';
+  notes.forEach(({ text, style }) => {
+    const div = document.createElement('div');
+    div.className = 'translate-note' + (style ? ` ${style}` : '');
+    div.textContent = text;
+    notesEl.appendChild(div);
+  });
+  document.getElementById('translateResult').style.display = 'block';
+  document.getElementById('swapBtn').style.display = 'inline-flex';
+
+  btn.disabled = false;
+  btn.textContent = '✦ Suggest Auslan word order';
+  } catch(err) {
+    log(`ERROR in doTranslate: ${err.message}\n${err.stack}`);
+    document.getElementById('debugArea').style.display = 'block';
+    document.querySelector('.debug-toggle').textContent = '▼ Hide debug log (select all to copy)';
+    document.getElementById('translateBtn').disabled = false;
+    document.getElementById('translateBtn').textContent = '✦ Suggest Auslan word order';
+  }
+}
+
+function swapToInput() {
+  const gloss = document.getElementById('translateGloss').textContent;
+  if (!gloss) return;
+  // Convert gloss back to title-case words for the input
+  const sentence = gloss.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  document.getElementById('sentenceInput').value = sentence;
+  // Trigger live lookup
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(lookupSentence, 100);
+  // Hide swap button and result since the sentence has changed
+  document.getElementById('translateResult').style.display = 'none';
+  document.getElementById('swapBtn').style.display = 'none';
+}
+
+// ── API fetch — gets ALL mp4 URLs + sign variant count from a word page ──
+// ── Word lookup — cache only, no live fetching ────────────────────────
+async function fetchPageData(word, signNum = 1) {
+  // For sign variants (sign-2, sign-3...) we don't have them pre-built,
+  // so return null — the Sign N button won't appear for uncached signs.
+  // To add more signs, run build-dictionary.py and re-deploy.
+  if (signNum > 1) return null;
+  return wordCache[word] || null;
+}
+
+// Derive possible base forms of a word to try in the dictionary
+function getBaseForms(word) {
+  const forms = [word];
+  // -ed endings: climbed→climb, walked→walk, liked→like, tried→try
+  if (word.endsWith('ied') && word.length > 4)
+    forms.push(word.slice(0, -3) + 'y');          // tried→try
+  if (word.endsWith('ed') && word.length > 4) {
+    forms.push(word.slice(0, -2));                  // walked→walk, climbed→climb
+    forms.push(word.slice(0, -1));                  // liked→like (strip just d)
+  }
+  // -ing endings: climbing→climb, running→run, making→make
+  if (word.endsWith('ing') && word.length > 5) {
+    forms.push(word.slice(0, -3));                  // climbing→climb
+    forms.push(word.slice(0, -3) + 'e');            // making→make
+  }
+  // -s endings: runs→run, plays→play
+  if (word.endsWith('s') && word.length > 3)
+    forms.push(word.slice(0, -1));
+  // -ies endings: tries→try
+  if (word.endsWith('ies') && word.length > 4)
+    forms.push(word.slice(0, -3) + 'y');
+  return [...new Set(forms)]; // deduplicate
+}
+
+// Normalisation map — words that share the same Auslan sign
+const SIGN_NORMALISE = {
+  // Pronouns — Auslan has no gender, all third-person singular/plural → same pointing sign
+  // him-1 is the canonical working entry (her-1 has a broken video file on Signbank)
+  'i':'me', 'mine':'my',
+  'your':'you', 'yours':'you',
+  'he':'him', 'she':'him', 'her':'him', 'his':'him', 'hers':'him',
+  'us':'we', 'our':'we', 'ours':'we',
+  'them':'they', 'their':'they', 'theirs':'they',
+  // Verb inflections → base form
+  'went':'go', 'going':'go', 'gone':'go',
+  'ate':'eat', 'eating':'eat', 'eaten':'eat',
+  'drank':'drink', 'drinking':'drink', 'drunk':'drink',
+  'ran':'run', 'running':'run',
+  'swam':'swim', 'swimming':'swim', 'swum':'swim',
+  'came':'come', 'coming':'come',
+  'saw':'see', 'seeing':'see', 'seen':'see',
+  'said':'say', 'saying':'say',
+  'gave':'give', 'giving':'give', 'given':'give',
+  'took':'take', 'taking':'take', 'taken':'take',
+  'made':'make', 'making':'make',
+  'got':'get', 'getting':'get', 'gotten':'get',
+  'knew':'know', 'knowing':'know', 'known':'know',
+  'thought':'think', 'thinking':'think',
+  'taught':'teach', 'teaching':'teach',
+  'bought':'buy', 'buying':'buy',
+  'brought':'bring', 'bringing':'bring',
+  'felt':'feel', 'feeling':'feel',
+  'kept':'keep', 'keeping':'keep',
+  'left':'leave', 'leaving':'leave',
+  'met':'meet', 'meeting':'meet',
+  'paid':'pay', 'paying':'pay',
+  'sent':'send', 'sending':'send',
+  'sat':'sit', 'sitting':'sit',
+  'stood':'stand', 'standing':'stand',
+  'walked':'walk', 'walking':'walk',
+  'played':'play', 'playing':'play',
+  'worked':'work', 'working':'work',
+  'helped':'help', 'helping':'help',
+  'liked':'like', 'liking':'like',
+  'loved':'love', 'loving':'love',
+  'wanted':'want', 'wanting':'want',
+  'needed':'need', 'needing':'need',
+  // Adjective/noun variants
+  'happiness':'happy', 'happily':'happy',
+  'sadness':'sad', 'sadly':'sad',
+  'anger':'angry', 'angrily':'angry',
+  'tiredness':'tired',
+  'sickness':'sick', 'ill':'sick', 'unwell':'sick',
+  'large':'big', 'huge':'big', 'enormous':'big',
+  'tiny':'small', 'little':'small',
+  'quickly':'fast', 'speedy':'fast',
+  'slowly':'slow',
+  // Common synonyms → dictionary word
+  'bathroom':'toilet', 'restroom':'toilet', 'loo':'toilet', 'lavatory':'toilet',
+  'mom':'mum', 'mother':'mum',
+  'dad':'father',
+  'cannot':'able', "can't":'able', 'can':'able',
+  'won\'t':'not', 'wont':'not',
+  'well':'good',
+  'badly':'bad',
+  // Plural nouns → singular (Auslan doesn't inflect for plurality)
+  'dogs':'dog', 'cats':'cat', 'birds':'bird', 'fish':'fish',
+  'people':'person', 'children':'child', 'men':'man', 'women':'woman',
+  'teachers':'teacher', 'students':'student', 'friends':'friend',
+  'trees':'tree', 'elephants':'elephant', 'horses':'horse',
+  'books':'book', 'cars':'car', 'houses':'house',
+};
+
+async function fetchVideoForWord(word) {
+  const clean = word.toLowerCase().replace(/[^a-z'-]/g, '');
+  if (!clean) return { word, found: false, fingerspell: false };
+
+  // Skip function words — they don't exist in Auslan
+  if (SKIP_WORDS.has(clean)) return { word: clean, found: false, fingerspell: false };
+
+  // Normalise to canonical sign form
+  const lookup = SIGN_NORMALISE[clean] || clean;
+
+  // Try the normalised form, then all base forms of the original word
+  const candidates = [lookup, ...getBaseForms(clean)];
+  for (const candidate of candidates) {
+    const data = wordCache[candidate];
+    if (data) {
+      log(`✓ "${clean}" → resolved via "${candidate}" → ${data.videoUrls[0]}`);
+      return { word: clean, found: true, fingerspell: false, ...data, currentVideoIdx: 0, currentSignIdx: 1 };
+    }
+  }
+  log(`✗ "${clean}" → not found (tried: ${candidates.join(', ')})`);
+  // Not in dictionary — fingerspell it
+  const letters = clean.replace(/[^a-z]/g, '').split('');
+  if (!letters.length) return { word: clean, found: false, fingerspell: false };
+  return { word: clean, found: true, fingerspell: true, letters };
+}
+
+// ── Live typing ───────────────────────────────────────────────────────
+let debounceTimer = null;
+
+function parseWords(sentence) {
+  return sentence.trim().split(/\s+/).filter(Boolean)
+    .flatMap(w => {
+      const lower = w.toLowerCase().replace(/[^a-z'-]/g, '');
+      const expanded = CONTRACTIONS[lower];
+      return expanded ? expanded.split(' ') : [lower];
+    })
+    .filter(Boolean);
+}
+
+async function lookupSentence() {
+  const words = parseWords(document.getElementById('sentenceInput').value);
+  wordData = [];
+  currentIdx = 0;
+  document.getElementById('noticeArea').textContent = '';
+  document.getElementById('debugArea').textContent = '';
+
+  const chipRow = document.getElementById('chipRow');
+  if (!words.length) {
+    chipRow.innerHTML = '';
+    document.getElementById('controls').style.display = 'none';
+    document.getElementById('variantPills').style.display = 'none';
+    document.getElementById('stage').innerHTML = `<div class="stage-empty"><div class="icon">🤟</div><p>Your signed sentence will appear here</p></div>`;
+    return;
+  }
+
+  while (chipRow.children.length > words.length) chipRow.removeChild(chipRow.lastChild);
+  while (chipRow.children.length < words.length) chipRow.appendChild(Object.assign(document.createElement('div'), {className: 'chip'}));
+
+  const chips = Array.from(chipRow.children);
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const chip = chips[i];
+    const result = await fetchVideoForWord(word);
+    wordData[i] = result;
+    applyChipState(chip, result, i);
+  }
+  refreshControls();
+}
+
+function applyChipState(chip, result, idx) {
+  if (!result) return;
+  if (result.found && !result.fingerspell) {
+    chip.className = 'chip found';
+    chip.innerHTML = `<span style="font-size:13px;opacity:0.8">✓</span> ${result.word} <span style="font-size:11px;opacity:0.6">▶</span>`;
+    chip.title = `Click to sign "${result.word}"`;
+    chip.onclick = () => showSign(idx);
+  } else if (result.found && result.fingerspell) {
+    chip.className = 'chip fingerspell';
+    chip.innerHTML = `<span style="font-size:12px;opacity:0.8">👋</span> ${result.word}`;
+    chip.title = `Fingerspell "${result.word}"`;
+    chip.onclick = () => showSign(idx);
+  } else {
+    chip.className = 'chip not-found';
+    chip.textContent = result.word;
+    chip.onclick = null;
+  }
+}
+
+function refreshControls() {
+  const active = wordData.filter(d => d && d.found);
+  if (!active.length) {
+    document.getElementById('controls').style.display = 'none';
+    document.getElementById('variantPills').style.display = 'none';
+    if (!document.getElementById('signVideo') && !document.getElementById('fsImg'))
+      document.getElementById('stage').innerHTML = `<div class="stage-empty"><div class="icon">🤟</div><p>Your signed sentence will appear here</p></div>`;
+    return;
+  }
+  document.getElementById('controls').style.display = 'flex';
+  document.getElementById('noticeArea').textContent = '';
+}
+
+// ── Fingerspelling ────────────────────────────────────────────────────
+const FS_BASE = 'https://auslan.org.au/static/images/twohanded/th_';
+let fsTimer = null;
+
+function showFingerspell(idx) {
+  const data = wordData[idx];
+  currentIdx = idx;
+
+  // Update chip highlights
+  document.querySelectorAll('.chip').forEach((c, i) => {
+    c.classList.remove('active', 'active-fs', 'found', 'fingerspell');
+    if (!wordData[i]) return;
+    if (i === idx) {
+      c.classList.add('active-fs');
+    } else if (wordData[i].found && wordData[i].fingerspell) {
+      c.classList.add('fingerspell');
+    } else if (wordData[i].found) {
+      c.classList.add('found');
+    }
+  });
+
+  document.getElementById('variantPills').style.display = 'none';
+
+  const letters = data.letters;
+  let letterIdx = 0;
+
+  function renderLetter(li) {
+    const letter = letters[li];
+    const imgUrl = `${FS_BASE}${letter}.jpg`;
+
+    // Build pip row
+    const pips = letters.map((l, i) => {
+      const cls = i < li ? 'done' : i === li ? 'current' : 'pending';
+      return `<div class="fs-letter-pip ${cls}">${l}</div>`;
+    }).join('');
+
+    document.getElementById('stage').innerHTML = `
+      <div class="fs-wrap">
+        <div class="fs-word-label">${data.word}</div>
+        <div class="fs-letter-display">
+          <div class="fs-letter">${letter.toUpperCase()}</div>
+          <img id="fsImg" class="fs-img" src="${imgUrl}" alt="${letter}" />
+        </div>
+        <div class="fs-letters-row">${pips}</div>
+      </div>`;
+
+    updateFsControls(idx, li, letters.length);
+  }
+
+  function updateFsControls(idx, li, total) {
+    const found = wordData.filter(d => d && d.found);
+    const pos = found.findIndex(d => d === wordData[idx]) + 1;
+    document.getElementById('progressText').textContent =
+      `${wordData[idx].word.toUpperCase()} — letter ${li + 1} of ${total}` +
+      (found.length > 1 ? ` (word ${pos}/${found.length})` : '');
+    document.getElementById('prevBtn').disabled = li === 0 && !wordData.slice(0, idx).some(d => d && d.found);
+    document.getElementById('nextBtn').disabled = li === total - 1 && !wordData.slice(idx + 1).some(d => d && d.found);
+  }
+
+  // Clear any running timer
+  clearInterval(fsTimer);
+  renderLetter(0);
+
+  // Autoplay through letters
+  if (document.getElementById('autoplayCheck').checked) {
+    fsTimer = setInterval(() => {
+      letterIdx++;
+      if (letterIdx >= letters.length) {
+        clearInterval(fsTimer);
+        fsTimer = null;
+        const hasNext = wordData.slice(idx + 1).some(d => d && d.found);
+        if (hasNext) {
+          setTimeout(() => nextSign(), 600);
+        } else if (document.getElementById('loopCheck').checked) {
+          setTimeout(() => {
+            const first = wordData.findIndex(d => d && d.found);
+            if (first !== -1) showSign(first);
+          }, 600);
+        }
+      } else {
+        renderLetter(letterIdx);
+      }
+    }, 1200);
+  } else {
+    // Manual step: next/prev buttons step through letters
+    document.getElementById('nextBtn').onclick = () => {
+      clearInterval(fsTimer);
+      if (letterIdx < letters.length - 1) {
+        letterIdx++;
+        renderLetter(letterIdx);
+      } else {
+        restoreNavButtons();
+        nextWordSign();
+      }
+    };
+    document.getElementById('prevBtn').onclick = () => {
+      clearInterval(fsTimer);
+      if (letterIdx > 0) {
+        letterIdx--;
+        renderLetter(letterIdx);
+      } else {
+        restoreNavButtons();
+        prevWordSign();
+      }
+    };
+  }
+}
+
+function restoreNavButtons() {
+  document.getElementById('nextBtn').onclick = nextSign;
+  document.getElementById('prevBtn').onclick = prevSign;
+}
+
+// ── Show a word's sign ────────────────────────────────────────────────
+function showSign(idx, videoIdx) {
+  if (idx < 0 || idx >= wordData.length) return;
+  clearInterval(fsTimer);
+  restoreNavButtons();
+  currentIdx = idx;
+  const data = wordData[idx];
+  if (!data || !data.found) return;
+
+  // Fingerspell?
+  if (data.fingerspell) {
+    showFingerspell(idx);
+    return;
+  }
+
+  if (videoIdx === undefined) videoIdx = data.currentVideoIdx || 0;
+  data.currentVideoIdx = videoIdx;
+
+  // Update chip highlights
+  document.querySelectorAll('.chip').forEach((c, i) => {
+    c.classList.remove('active', 'active-fs', 'found', 'fingerspell');
+    if (!wordData[i]) return;
+    if (i === idx) {
+      c.classList.add('active');
+    } else if (wordData[i].found && wordData[i].fingerspell) {
+      c.classList.add('fingerspell');
+    } else if (wordData[i].found) {
+      c.classList.add('found');
+    }
+  });
+
+  const videoUrl = data.videoUrls[videoIdx];
+  const looping = document.getElementById('loopCheck').checked;
+  document.getElementById('stage').innerHTML = `
+    <div class="video-wrap">
+      <video id="signVideo" src="${videoUrl}" autoplay playsinline controls></video>
+      <div class="video-label">${data.word}</div>
+    </div>`;
+
+  document.getElementById('signVideo').addEventListener('ended', () => {
+    if (document.getElementById('autoplayCheck').checked) {
+      const hasNext = wordData.slice(currentIdx + 1).some(d => d && d.found);
+      if (hasNext) {
+        nextSign();
+      } else if (document.getElementById('loopCheck').checked) {
+        // Loop back to first found word
+        const first = wordData.findIndex(d => d && d.found);
+        if (first !== -1) showSign(first);
+      }
+    }
+  });
+
+  renderVariantPills(data, idx, videoIdx);
+
+  const found = wordData.filter(d => d && d.found);
+  const pos = found.findIndex(d => d === data) + 1;
+  document.getElementById('progressText').textContent = found.length > 1 ? `Word ${pos} of ${found.length}` : '';
+  document.getElementById('prevBtn').disabled = !wordData.slice(0, idx).some(d => d && d.found);
+  document.getElementById('nextBtn').disabled = !wordData.slice(idx + 1).some(d => d && d.found);
+}
+
+function nextWordSign() {
+  for (let i = currentIdx + 1; i < wordData.length; i++)
+    if (wordData[i] && wordData[i].found) { showSign(i); return; }
+}
+function prevWordSign() {
+  for (let i = currentIdx - 1; i >= 0; i--)
+    if (wordData[i] && wordData[i].found) { showSign(i); return; }
+}
+
+async function renderVariantPills(data, idx, activeVideoIdx) {
+  const pillRow = document.getElementById('variantPills');
+  const videoCount = data.videoUrls.length;
+  const signCount  = data.signCount || 1;
+  const totalOptions = videoCount + (signCount - 1);
+
+  if (totalOptions <= 1) { pillRow.style.display = 'none'; return; }
+
+  pillRow.style.display = 'flex';
+  pillRow.innerHTML = '';
+
+  // Video variants already on this page (filtered for non-Definition URLs by fetchPageData)
+  for (let v = 0; v < videoCount; v++) {
+    const pill = document.createElement('button');
+    pill.className = 'variant-pill' + (v === activeVideoIdx ? ' active' : '');
+    pill.textContent = `Variant ${v + 1}`;
+    pill.onclick = () => showSign(idx, v);
+    pillRow.appendChild(pill);
+  }
+
+  // Other sign pages (sign-2, sign-3, ...)
+  for (let s = 2; s <= signCount; s++) {
+    const pill = document.createElement('button');
+    pill.className = 'variant-pill';
+    pill.textContent = `Sign ${s}`;
+    const word = data.word;
+    const signNum = s;
+    pill.onclick = async () => {
+      pill.classList.add('loading');
+      pill.textContent = 'Loading…';
+      const cacheKey = `${word}__sign${signNum}`;
+      let signData = wordCache[cacheKey];
+      if (!signData) {
+        signData = await fetchPageData(word, signNum);
+        wordCache[cacheKey] = signData || null;
+      }
+      if (signData) {
+        data.videoUrls = signData.videoUrls;
+        data.currentSignIdx = signNum;
+        data.currentVideoIdx = 0;
+        showSign(idx, 0);
+      } else {
+        pill.textContent = `Sign ${signNum} (n/a)`;
+        pill.classList.remove('loading');
+      }
+    };
+    pillRow.appendChild(pill);
+  }
+}
+
+function prevSign() {
+  clearInterval(fsTimer);
+  restoreNavButtons();
+  prevWordSign();
+}
+function nextSign() {
+  clearInterval(fsTimer);
+  restoreNavButtons();
+  nextWordSign();
+}
+function replaySign() {
+  const v = document.getElementById('signVideo');
+  if (v) { v.currentTime = 0; v.play(); return; }
+  const data = wordData[currentIdx];
+  if (data && data.fingerspell) showFingerspell(currentIdx);
+}
+
+document.getElementById('sentenceInput').addEventListener('input', () => {
+  document.getElementById('swapBtn').style.display = 'none';
+  document.getElementById('translateResult').style.display = 'none';
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(lookupSentence, 300);
+
+  // Enable/disable translate button based on word count
+  const wordCount = parseWords(document.getElementById('sentenceInput').value).length;
+  const btn = document.getElementById('translateBtn');
+  if (wordCount > WORD_LIMIT) {
+    btn.disabled = true;
+    btn.textContent = `✦ Too many words to analyse (max ${WORD_LIMIT})`;
+  } else {
+    btn.disabled = false;
+    btn.textContent = '✦ Suggest Auslan word order';
+  }
+});
+</script>
+</body>
+</html>
